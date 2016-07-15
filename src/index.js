@@ -2,6 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import PDF from 'pdfjs-dist/build/pdf.combined.js';
 
+let {Component, PropTypes} = React;
+
 export default class SimplePDF extends React.Component {
 
   constructor(props) {
@@ -14,7 +16,7 @@ export default class SimplePDF extends React.Component {
   loadPDF() {
 
     // get node for this react component
-    var node = ReactDOM.findDOMNode(this).getElementsByClassName("S-PDF-ID")[0];
+    let node = ReactDOM.findDOMNode(this).getElementsByClassName("S-PDF-ID")[0];
 
     // clean for update
     node.innerHTML = "";
@@ -26,6 +28,8 @@ export default class SimplePDF extends React.Component {
     node.style.overflowY = "scroll";
     node.style.padding = '0px';
 
+    const props = this.props;
+
     PDF.getDocument(this.props.file).then(function(pdf) {
 
       // no scrollbar if pdf has only one page
@@ -33,30 +37,40 @@ export default class SimplePDF extends React.Component {
         node.style.overflowY = "hidden";
       }
 
-      for (var id=1,i=1; i<=pdf.numPages; i++) {
+      let pagesRendered = 0;
+
+      for (let id=1,i=1; i<=pdf.numPages; i++) {
 
         pdf.getPage(i).then(function(page) {
 
           // calculate scale according to the box size
-          var boxWidth = node.clientWidth;
-          var pdfWidth = page.getViewport(1).width;
-          var scale = boxWidth / pdfWidth;
-          var viewport = page.getViewport(scale);
+          const boxWidth = node.clientWidth;
+          const pdfWidth = page.getViewport(1).width;
+          const scale = boxWidth / pdfWidth;
+          const viewport = page.getViewport(scale);
 
           // set canvas for page
-          var canvas = document.createElement('canvas');
+          let canvas = document.createElement('canvas');
           canvas.id  = "page-"+id; id++;
           canvas.width  = viewport.width;
           canvas.height = viewport.height;
           node.appendChild(canvas);
 
           // get context and render page
-          var context = canvas.getContext('2d');
-          var renderContext = {
+          const context = canvas.getContext('2d');
+          const renderContext = {
             canvasContext : context,
             viewport      : viewport
           };
-          page.render(renderContext);
+          page.render(renderContext).then(() => {
+            if (pagesRendered === pdf.numPages - 1) {
+              props.onRenderComplete();
+            }
+            props.onPageRenderComplete(page);
+            pagesRendered++;
+            }, (error) => {
+              props.onPageRenderError(error);
+            });
         });
       }
     });
@@ -79,4 +93,16 @@ export default class SimplePDF extends React.Component {
   }
 }
 
-module.exports = { SimplePDF: SimplePDF };
+SimplePDF.propTypes = {
+  onPageRenderComplete: PropTypes.func,
+  onRenderComplete: PropTypes.func,
+  onPageRenderError: PropTypes.func,
+  file: PropTypes.string
+};
+
+SimplePDF.defaultProps = {
+  onPageRenderComplete: () => {},
+  onRenderComplete: () => {},
+  onPageRenderError: () => {},
+  file: null
+};
